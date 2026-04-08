@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance Review Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #1a2744;    --navy-mid: #253460;   --navy-light: #3a4f82;
+    --gold:  #c8960d;
+    --bg:    #f2f4f9;   --surface: #ffffff;    --border: #dde3ee;
+    --text:  #1a202c;   --muted:   #718096;
+    --c-poor:#c53030;   --c-needs: #c05621;    --c-meets: #b7791f;
+    --c-exc: #2b6cb0;   --c-out:   #276749;    --c-mgr:   #2b6cb0;
+  }
+  body { font-family:'DM Sans',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  .serif { font-family:'Playfair Display',Georgia,serif; }
+
+  /* ── LOADING ── */
+  #v-loading {
+    min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:1rem;
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 55%,#1e3a6e 100%); color:white;
+  }
+  .spinner { width:36px; height:36px; border:3px solid rgba(255,255,255,0.2); border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #v-loading p { font-size:0.875rem; opacity:0.6; }
+
+  /* ── LOGIN ── */
+  #v-login { min-height:100vh; display:none; background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 55%,#1e3a6e 100%); }
+  #v-login .inner { display:flex; min-height:100vh; }
+  .login-left { flex:1; display:flex; flex-direction:column; justify-content:center; padding:3rem 4rem; color:white; max-width:520px; }
+  .login-logo { width:44px; height:44px; background:var(--gold); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; font-weight:700; color:white; margin-bottom:2.5rem; font-family:'Playfair Display',serif; }
+  .login-left h1 { font-family:'Playfair Display',serif; font-size:2.1rem; font-weight:700; line-height:1.2; margin-bottom:1rem; }
+  .login-left > p { font-size:0.95rem; opacity:0.7; line-height:1.7; max-width:340px; }
+  .login-pills { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1.75rem; }
+  .pill { border:1px solid rgba(255,255,255,0.25); padding:5px 14px; border-radius:20px; font-size:0.75rem; opacity:0.8; }
+  .login-right { flex:0 0 440px; background:white; display:flex; flex-direction:column; justify-content:center; padding:3rem; }
+  .login-right h2 { font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:600; color:var(--navy); margin-bottom:0.4rem; }
+  .login-right > p { font-size:0.85rem; color:var(--muted); margin-bottom:2rem; }
+
+  .ms-btn {
+    display:flex; align-items:center; justify-content:center; gap:12px; width:100%;
+    background:#0078d4; color:white; border:none; border-radius:6px; padding:0.85rem 1.25rem;
+    font-family:'DM Sans',sans-serif; font-size:0.95rem; font-weight:500; cursor:pointer;
+    transition:background 0.2s; text-decoration:none;
+  }
+  .ms-btn:hover { background:#106ebe; }
+
+  .divider { display:flex; align-items:center; gap:0.75rem; margin:1.25rem 0; color:var(--muted); font-size:0.8rem; }
+  .divider::before,.divider::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  .demo-btn { width:100%; background:transparent; border:1px solid var(--border); border-radius:6px; padding:0.75rem; font-family:'DM Sans',sans-serif; font-size:0.875rem; color:var(--navy); cursor:pointer; transition:background 0.2s; }
+  .demo-btn:hover { background:var(--bg); }
+
+  .info-strip { margin-top:1.5rem; background:#f0f3f9; border-radius:8px; padding:0.875rem 1rem; font-size:0.79rem; color:var(--muted); line-height:1.6; }
+  .info-strip strong { color:var(--navy); }
+
+  /* ── DEMO PICKER ── */
+  #v-demo { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:900; display:none; align-items:center; justify-content:center; }
+  .demo-modal { background:white; border-radius:14px; padding:2rem; width:360px; max-width:92vw; }
+  .demo-modal h3 { font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--navy); margin-bottom:0.35rem; }
+  .demo-modal p  { font-size:0.82rem; color:var(--muted); margin-bottom:1.25rem; }
+  .role-cards { display:grid; gap:0.625rem; margin-bottom:1.25rem; }
+  .role-card { border:1.5px solid var(--border); border-radius:8px; padding:0.875rem 1rem; cursor:pointer; transition:border-color 0.15s,background 0.15s; }
+  .role-card:hover    { border-color:var(--navy-light); background:#f7f9ff; }
+  .role-card.selected { border-color:var(--navy); background:#f0f3ff; }
+  .rc-title { font-size:0.9rem; font-weight:500; color:var(--navy); }
+  .rc-desc  { font-size:0.75rem; color:var(--muted); margin-top:2px; }
+
+  /* ── APP SHELL ── */
+  #v-app { display:none; min-height:100vh; flex-direction:column; }
+  #v-app.active { display:flex; }
+
+  .app-header { background:var(--navy); color:white; padding:0.875rem 2rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; position:sticky; top:0; z-index:100; }
+  .logo-area  { display:flex; align-items:center; gap:0.875rem; }
+  .app-logo   { width:34px; height:34px; background:var(--gold); border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:1rem; font-weight:700; color:white; }
+  .app-title  { font-family:'Playfair Display',serif; font-size:1.05rem; font-weight:600; }
+  .app-sub    { font-size:0.72rem; opacity:0.6; margin-top:1px; }
+  .user-area  { display:flex; align-items:center; gap:0.875rem; }
+  .user-info  { text-align:right; }
+  .user-name  { font-size:0.85rem; font-weight:500; }
+  .user-email { font-size:0.72rem; opacity:0.6; }
+  .user-avatar{ width:34px; height:34px; border-radius:50%; background:var(--navy-light); display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:600; border:1.5px solid rgba(255,255,255,0.3); }
+  .role-pill  { font-size:0.68rem; font-weight:500; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .rp-mgr { background:rgba(43,108,176,0.25); color:#90cdf4; }
+  .rp-hr  { background:rgba(107,70,193,0.25); color:#d6bcfa; }
+  .rp-dir { background:rgba(183,121,31,0.25); color:#fbd38d; }
+  .logout-btn { background:none; border:1px solid rgba(255,255,255,0.25); border-radius:6px; color:rgba(255,255,255,0.75); font-family:'DM Sans',sans-serif; font-size:0.78rem; padding:5px 12px; cursor:pointer; transition:all 0.15s; text-decoration:none; display:inline-block; }
+  .logout-btn:hover { background:rgba(255,255,255,0.1); color:white; }
+
+  /* ── NAV ── */
+  .app-nav { background:var(--navy-mid); display:flex; padding:0 2rem; }
+  .nav-btn { background:none; border:none; color:rgba(255,255,255,0.55); font-family:'DM Sans',sans-serif; font-size:0.875rem; font-weight:400; padding:0.875rem 1.25rem; cursor:pointer; border-bottom:2px solid transparent; transition:color 0.2s,border-color 0.2s; white-space:nowrap; }
+  .nav-btn:hover  { color:white; }
+  .nav-btn.active { color:white; border-bottom-color:var(--gold); font-weight:500; }
+  .nav-sep { border-left:1px solid rgba(255,255,255,0.1); }
+
+  .app-main { flex:1; max-width:960px; margin:0 auto; padding:2rem 1.5rem; width:100%; }
+
+  /* ── VIEWS ── */
+  .view { display:none; }
+  .view.active { display:block; }
+
+  /* ── CARDS ── */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin-bottom:1.25rem; }
+  .card-title { font-family:'Playfair Display',serif; font-size:1.05rem; font-weight:600; color:var(--navy); margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
+
+  /* ── FORM ── */
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  .field { display:flex; flex-direction:column; gap:0.375rem; }
+  .field label { font-size:0.72rem; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+  .field input,.field select,.field textarea { border:1px solid var(--border); border-radius:8px; padding:0.6rem 0.875rem; font-family:'DM Sans',sans-serif; font-size:0.9rem; color:var(--text); background:#fafbfd; transition:border-color 0.2s; outline:none; }
+  .field input:focus,.field select:focus,.field textarea:focus { border-color:var(--navy-mid); background:white; }
+  .field textarea { resize:vertical; min-height:78px; }
+  .field input[readonly] { background:#f0f3f9; cursor:default; color:var(--muted); }
+
+  /* ── KPI ── */
+  .kpi-lbl  { font-size:0.72rem; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin:1.25rem 0 0.75rem; }
+  .kpi-grid { display:grid; gap:0.625rem; }
+  .kpi-row  { display:grid; grid-template-columns:1fr auto; align-items:center; gap:1rem; padding:0.75rem; border-radius:8px; border:1px solid var(--border); background:#fafbfd; }
+  .kpi-name { font-size:0.875rem; font-weight:500; }
+  .kpi-desc { font-size:0.75rem; color:var(--muted); margin-top:2px; }
+  .star-row { display:flex; gap:2px; }
+  .star-btn { background:none; border:none; cursor:pointer; font-size:1.4rem; color:#dde3ee; line-height:1; transition:color 0.12s,transform 0.1s; padding:2px 1px; }
+  .star-btn:hover { transform:scale(1.15); }
+  .star-btn.lit-1{color:var(--c-poor);} .star-btn.lit-2{color:var(--c-needs);}
+  .star-btn.lit-3{color:#d4a017;}       .star-btn.lit-4{color:var(--c-exc);}
+  .star-btn.lit-5{color:var(--c-out);}
+
+  .score-box { display:none; text-align:center; border-radius:10px; border:1px solid var(--border); background:var(--bg); padding:1rem 1.5rem; margin-top:1rem; }
+  .score-num { font-family:'Playfair Display',serif; font-size:2.5rem; font-weight:700; line-height:1; }
+  .score-sub { font-size:0.75rem; color:var(--muted); margin-top:3px; }
+  .score-lbl { font-size:0.875rem; font-weight:500; margin-top:4px; }
+
+  /* ── BUTTONS ── */
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:0.7rem 1.4rem; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:0.875rem; font-weight:500; cursor:pointer; border:none; transition:all 0.18s; }
+  .btn-primary { background:var(--navy); color:white; }
+  .btn-primary:hover { background:var(--navy-mid); }
+  .btn-outline { background:transparent; color:var(--navy); border:1px solid var(--navy); }
+  .btn-outline:hover { background:var(--bg); }
+  .btn-green   { background:#276749; color:white; }
+  .btn-green:hover { background:#1f5138; }
+  .btn-sm { padding:0.38rem 0.875rem; font-size:0.78rem; }
+
+  /* ── TABLES ── */
+  .emp-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+  .emp-table th { text-align:left; padding:0.5rem 0.75rem; font-size:0.7rem; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid var(--border); }
+  .emp-table td { padding:0.7rem 0.75rem; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .emp-table tr:last-child td { border-bottom:none; }
+  .emp-table tbody tr:hover td { background:#fafbfd; }
+  .emp-table .avg-row td { background:#f0f3f9; font-weight:500; }
+
+  /* ── BADGES ── */
+  .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:0.7rem; font-weight:500; }
+  .b-poor { background:#fff5f5; color:var(--c-poor); }
+  .b-needs{ background:#fffaf0; color:var(--c-needs); }
+  .b-meets{ background:#fffff0; color:var(--c-meets); }
+  .b-exc  { background:#ebf8ff; color:var(--c-exc); }
+  .b-out  { background:#f0fff4; color:var(--c-out); }
+
+  /* ── STATS ── */
+  .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.25rem; }
+  .stat-card  { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; text-align:center; }
+  .stat-val   { font-family:'Playfair Display',serif; font-size:2rem; font-weight:700; color:var(--navy); }
+  .stat-lbl   { font-size:0.7rem; color:var(--muted); margin-top:5px; text-transform:uppercase; letter-spacing:0.05em; }
+
+  /* ── CHARTS ── */
+  .chart-grid { display:grid; grid-template-columns:3fr 2fr; gap:1.25rem; margin-bottom:1.25rem; }
+  .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.5rem; }
+  .chart-lbl  { font-size:0.72rem; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:1rem; }
+
+  /* ── MGR TABS ── */
+  .mgr-tabs { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.25rem; }
+  .mgr-tab  { border:1px solid var(--border); border-radius:20px; padding:5px 14px; font-size:0.78rem; background:white; cursor:pointer; transition:all 0.15s; color:var(--muted); }
+  .mgr-tab:hover  { border-color:var(--navy-light); color:var(--navy); }
+  .mgr-tab.active { background:var(--navy); color:white; border-color:var(--navy); }
+
+  /* ── NOTE ── */
+  .note { background:#f0f3f9; border-left:3px solid var(--navy-light); border-radius:0 8px 8px 0; padding:0.875rem 1rem; font-size:0.82rem; color:var(--muted); margin-bottom:1.25rem; line-height:1.6; }
+  .note strong { color:var(--navy); }
+
+  .empty { text-align:center; padding:2.5rem 1rem; color:var(--muted); }
+  .empty h3 { font-size:1rem; color:var(--text); margin-bottom:0.4rem; }
+
+  .del-btn { background:none; border:none; cursor:pointer; color:var(--muted); font-size:0.95rem; padding:4px 6px; border-radius:4px; transition:color 0.15s,background 0.15s; }
+  .del-btn:hover { color:var(--c-poor); background:#fff5f5; }
+
+  .err-msg { color:var(--c-poor); font-size:0.82rem; margin-top:0.75rem; display:none; }
+
+  @media(max-width:768px){
+    #v-login .inner { flex-direction:column; }
+    .login-left { padding:2rem 1.5rem; max-width:100%; }
+    .login-right { flex:none; padding:2rem 1.5rem; }
+    .stats-grid,.chart-grid,.form-grid { grid-template-columns:1fr; }
+    .app-main { padding:1rem; }
+    .app-header { padding:0.875rem 1rem; }
+    .app-nav { padding:0 0.5rem; }
+    .user-info { display:none; }
+    .kpi-row { grid-template-columns:1fr; }
+  }
+  </style>
+</head>
+<body>
+
+<!-- ══ LOADING ══ -->
+<div id="v-loading">
+  <div class="spinner"></div>
+  <p>Checking your session…</p>
+</div>
+
+<!-- ══ LOGIN ══ -->
+<div id="v-login">
+  <div class="inner">
+    <div class="login-left">
+      <div class="login-logo">P</div>
+      <h1 class="serif">Performance<br>Review Portal</h1>
+      <p>Securely capture and analyse employee performance data with role-based access for managers, HR, and directors.</p>
+      <div class="login-pills">
+        <span class="pill">5 KPI Dimensions</span>
+        <span class="pill">Role-Based Access</span>
+        <span class="pill">Live Analytics</span>
+        <span class="pill">CSV Export</span>
+      </div>
+    </div>
+    <div class="login-right">
+      <h2 class="serif">Sign in</h2>
+      <p>Use your Office 365 account to access your dashboard.</p>
+
+      <a href="/.auth/login/aad?post_login_redirect_uri=/" class="ms-btn">
+        <svg width="20" height="20" viewBox="0 0 21 21" fill="none">
+          <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+          <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+          <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+        </svg>
+        Sign in with Microsoft
+      </a>
+
+      <div class="divider">or</div>
+      <button class="demo-btn" onclick="openDemo()">Try Demo Mode (no login required)</button>
+
+      <div class="info-strip">
+        <strong>No passwords stored here.</strong> Login is handled entirely by Microsoft.
+        Your Office 365 credentials are verified directly by Azure — this portal never sees them.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DEMO PICKER ══ -->
+<div id="v-demo">
+  <div class="demo-modal">
+    <h3 class="serif">Demo Mode</h3>
+    <p>Choose a role to explore the portal. No data is sent anywhere.</p>
+    <div class="role-cards">
+      <div class="role-card" onclick="pickRole('manager','Alex Johnson','Front Office')"   id="rc-mgr"><div class="rc-title">Manager</div><div class="rc-desc">Add feedback for your team &amp; view your own dashboard</div></div>
+      <div class="role-card" onclick="pickRole('hr','Sarah Clarke','Human Resources')"     id="rc-hr"><div class="rc-title">HR</div><div class="rc-desc">View all managers' dashboards and org-wide analytics</div></div>
+      <div class="role-card" onclick="pickRole('director','Michael Torres','Executive')"   id="rc-dir"><div class="rc-title">Director</div><div class="rc-desc">Full access to all team performance data and reports</div></div>
+    </div>
+    <div style="display:flex;gap:0.75rem;">
+      <button class="btn btn-primary" style="flex:1" id="demo-go-btn" onclick="launchDemo()" disabled>Enter Demo</button>
+      <button class="btn btn-outline" onclick="closeDemo()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="v-app">
+  <div class="app-header">
+    <div class="logo-area">
+      <div class="app-logo">P</div>
+      <div><div class="app-title">Performance Review Portal</div><div class="app-sub" id="app-sub">—</div></div>
+    </div>
+    <div class="user-area">
+      <div class="user-info">
+        <div class="user-name"  id="hdr-name">—</div>
+        <div class="user-email" id="hdr-email">—</div>
+      </div>
+      <span class="role-pill" id="hdr-pill"></span>
+      <div class="user-avatar" id="hdr-av">?</div>
+      <a id="logout-link" class="logout-btn">Sign out</a>
+    </div>
+  </div>
+
+  <nav class="app-nav">
+    <button class="nav-btn active" onclick="goTo('form')" id="nav-form">Add Feedback</button>
+    <button class="nav-btn"        onclick="goTo('mine')" id="nav-mine">My Dashboard</button>
+    <button class="nav-btn nav-sep" onclick="goTo('all')" id="nav-all" style="display:none;">All Teams</button>
+  </nav>
+
+  <div class="app-main">
+
+    <!-- ADD FEEDBACK -->
+    <div id="view-form" class="view active">
+      <div class="card">
+        <h2 class="card-title">Review Details</h2>
+        <div class="form-grid">
+          <div class="field"><label>Manager</label><input id="m-name" type="text" readonly></div>
+          <div class="field"><label>Department</label><input id="m-dept" type="text" readonly></div>
+          <div class="field"><label>Review Period</label><input id="m-period" type="text" placeholder="e.g. Q2 2025"></div>
+          <div class="field"><label>Review Date</label><input id="m-date" type="date"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Employee Performance Entry</h2>
+        <div class="form-grid" style="margin-bottom:.5rem">
+          <div class="field"><label>Employee Name</label><input id="e-name" type="text" placeholder="Full name"></div>
+          <div class="field"><label>Section / Role</label><input id="e-section" type="text" placeholder="e.g. Front Office"></div>
+        </div>
+        <p class="kpi-lbl">KPI Ratings — click stars (1 = Poor · 5 = Outstanding)</p>
+        <div class="kpi-grid" id="kpi-grid"></div>
+        <div class="score-box" id="score-box">
+          <div class="score-num" id="score-num">—</div>
+          <div class="score-sub">Overall Score (avg. of 5 KPIs)</div>
+          <div class="score-lbl" id="score-lbl"></div>
+        </div>
+        <div style="display:grid;gap:1rem;margin-top:1.25rem">
+          <div class="field"><label>Key Strengths</label><textarea id="e-strengths" placeholder="Describe the employee's key strengths…"></textarea></div>
+          <div class="field"><label>Areas for Improvement</label><textarea id="e-improve" placeholder="Areas where the employee can develop…"></textarea></div>
+          <div class="field"><label>Additional Comments</label><textarea id="e-comments" placeholder="Any further notes for the HR record…"></textarea></div>
+        </div>
+        <div class="err-msg" id="form-err"></div>
+        <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.25rem">
+          <button class="btn btn-primary" id="add-btn" onclick="addEmployee()">Add Employee Record</button>
+          <button class="btn btn-outline" onclick="clearForm()">Clear Form</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">
+          <span>My Submitted Records (<span id="emp-count">0</span>)</span>
+          <button class="btn btn-green btn-sm" onclick="goTo('mine')">View Dashboard →</button>
+        </h2>
+        <div id="emp-list"><div class="empty"><h3>No records yet</h3><p>Add employee feedback above.</p></div></div>
+      </div>
+    </div>
+
+    <!-- MY DASHBOARD -->
+    <div id="view-mine" class="view">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="ms-total">0</div><div class="stat-lbl">Employees</div></div>
+        <div class="stat-card"><div class="stat-val" id="ms-avg">—</div><div class="stat-lbl">Avg Score</div></div>
+        <div class="stat-card"><div class="stat-val" id="ms-out" style="color:var(--c-out)">0</div><div class="stat-lbl">Outstanding</div></div>
+        <div class="stat-card"><div class="stat-val" id="ms-low" style="color:var(--c-poor)">0</div><div class="stat-lbl">Needs Attention</div></div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card"><div class="chart-lbl">Average score by KPI</div><canvas id="my-kpi-chart" height="180"></canvas></div>
+        <div class="chart-card"><div class="chart-lbl">Score distribution</div><canvas id="my-dist-chart" height="180"></canvas></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title"><span>Employee Scorecards</span><button class="btn btn-outline btn-sm" onclick="exportCSV('mine')">Export CSV ↓</button></h2>
+        <div id="my-table"><div class="empty"><h3>No data yet</h3></div></div>
+      </div>
+    </div>
+
+    <!-- ALL TEAMS -->
+    <div id="view-all" class="view">
+      <div class="note" id="access-note"></div>
+      <div style="font-size:.72rem;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem">Filter by Manager</div>
+      <div class="mgr-tabs" id="mgr-tabs"></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="as-total">0</div><div class="stat-lbl">Employees</div></div>
+        <div class="stat-card"><div class="stat-val" id="as-avg">—</div><div class="stat-lbl">Avg Score</div></div>
+        <div class="stat-card"><div class="stat-val" id="as-out" style="color:var(--c-out)">0</div><div class="stat-lbl">Outstanding</div></div>
+        <div class="stat-card"><div class="stat-val" id="as-low" style="color:var(--c-poor)">0</div><div class="stat-lbl">Needs Attention</div></div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card"><div class="chart-lbl">Average score by KPI</div><canvas id="all-kpi-chart" height="180"></canvas></div>
+        <div class="chart-card"><div class="chart-lbl">Score distribution</div><canvas id="all-dist-chart" height="180"></canvas></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title"><span>All Employee Scorecards</span><button class="btn btn-outline btn-sm" onclick="exportCSV('all')">Export CSV ↓</button></h2>
+        <div id="all-table"><div class="empty"><h3>No data yet</h3></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   CONFIGURATION  ←  ONLY THING YOU NEED TO EDIT
+   Add your HR and Director Office 365 emails (lowercase).
+   Everyone else who signs in will be assigned the Manager role.
+═══════════════════════════════════════════════════════════════════ */
+const HR_EMAILS = [
+  'hr@yourcompany.com',
+  'hr.manager@yourcompany.com'
+];
+const DIRECTOR_EMAILS = [
+  'director@yourcompany.com',
+  'ceo@yourcompany.com'
+];
+/* ═══════════════════════════════════════════════════════════════════ */
+
+const KPIS = [
+  {key:1,name:'Quality of Work',              desc:'Accuracy, attention to detail, standards met'},
+  {key:2,name:'Productivity & Efficiency',    desc:'Output volume, time management, targets met'},
+  {key:3,name:'Teamwork & Collaboration',     desc:'Supporting colleagues, knowledge-sharing, team spirit'},
+  {key:4,name:'Communication Skills',         desc:'Clarity, listening, verbal and written communication'},
+  {key:5,name:'Initiative & Problem-Solving', desc:'Proactivity, creative solutions, self-direction'}
+];
+const KPI_COLORS = ['#2b6cb0','#276749','#b7791f','#6b46c1','#c05621'];
+
+let currentUser=null, ratings={1:0,2:0,3:0,4:0,5:0};
+let myKpiChart=null,myDistChart=null,allKpiChart=null,allDistChart=null;
+let selectedMgr='ALL', demoRole=null;
+
+/* ── BOOT: read Azure SWA EasyAuth session ── */
+async function boot() {
+  try {
+    const res  = await fetch('/.auth/me');
+    const json = await res.json();
+    const cp   = json.clientPrincipal;
+    if (cp && cp.userDetails) {
+      const email = cp.userDetails.toLowerCase();
+      const name  = extractName(cp.claims) || cp.userDetails;
+      const role  = DIRECTOR_EMAILS.includes(email) ? 'director'
+                  : HR_EMAILS.includes(email)        ? 'hr'
+                  : 'manager';
+      loginAs({name, email, dept: deptFor(email, role), role, realLogin:true});
+    } else {
+      showLogin();
+    }
+  } catch(_) {
+    // Running locally as a file:// — show login screen with demo option
+    showLogin();
+  }
+}
+
+function extractName(claims) {
+  if (!claims) return null;
+  const n = claims.find(c => c.typ === 'name');
+  if (n) return n.val;
+  const g = claims.find(c => c.typ.endsWith('/givenname'));
+  const s = claims.find(c => c.typ.endsWith('/surname'));
+  return (g && s) ? g.val + ' ' + s.val : null;
+}
+
+function deptFor(email, role) {
+  if (role === 'hr')       return 'Human Resources';
+  if (role === 'director') return 'Executive';
+  // Extract domain subdomain as dept hint if available
+  return 'Management';
+}
+
+function showLogin() {
+  document.getElementById('v-loading').style.display = 'none';
+  document.getElementById('v-login').style.display   = 'flex';
+}
+
+/* ── DEMO ── */
+function openDemo()  { document.getElementById('v-demo').style.display='flex'; }
+function closeDemo() { document.getElementById('v-demo').style.display='none'; demoRole=null; document.querySelectorAll('.role-card').forEach(c=>c.classList.remove('selected')); document.getElementById('demo-go-btn').disabled=true; }
+function pickRole(role,name,dept) {
+  demoRole={role,name,email:name.toLowerCase().replace(' ','.')+'.demo@example.com',dept,realLogin:false};
+  document.querySelectorAll('.role-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('rc-'+(role==='manager'?'mgr':role)).classList.add('selected');
+  document.getElementById('demo-go-btn').disabled=false;
+}
+function launchDemo() { if(!demoRole)return; closeDemo(); loginAs(demoRole); }
+
+/* ── LOGIN ── */
+function loginAs(user) {
+  currentUser = user;
+  document.getElementById('v-loading').style.display='none';
+  document.getElementById('v-login').style.display='none';
+  document.getElementById('v-app').style.cssText='display:flex;min-height:100vh;flex-direction:column;';
+
+  document.getElementById('hdr-name').textContent  = user.name;
+  document.getElementById('hdr-email').textContent = user.email;
+  document.getElementById('hdr-av').textContent    = user.name.trim().split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('app-sub').textContent   = user.dept + ' — Performance Review Portal';
+
+  const pill={manager:'Manager',hr:'HR',director:'Director'};
+  const pcls={manager:'rp-mgr',hr:'rp-hr',director:'rp-dir'};
+  const p=document.getElementById('hdr-pill');
+  p.textContent=pill[user.role]; p.className='role-pill '+pcls[user.role];
+
+  const lo=document.getElementById('logout-link');
+  if (user.realLogin) {
+    lo.href='/.auth/logout?post_logout_redirect_uri=/';
+  } else {
+    lo.href='#';
+    lo.onclick=e=>{e.preventDefault();location.reload();};
+  }
+
+  document.getElementById('m-name').value=user.name;
+  document.getElementById('m-dept').value=user.dept;
+  document.getElementById('m-date').value=new Date().toISOString().slice(0,10);
+
+  if (user.role==='hr'||user.role==='director') {
+    document.getElementById('nav-all').style.display='';
+    document.getElementById('access-note').innerHTML=
+      `<strong>${user.role==='director'?'Director':'HR'} full-access view:</strong> You can see performance records submitted by all managers stored in this browser. Managers on different devices should export their CSV and share with HR for consolidation.`;
+  }
+
+  buildKpiGrid(); renderList(); goTo('form');
+}
+
+/* ── DATA ── */
+function sKey(e){return'mprf_'+e.toLowerCase().replace(/[^a-z0-9]/g,'_');}
+function getMyData(){try{return JSON.parse(localStorage.getItem(sKey(currentUser.email))||'[]');}catch(_){return[];}}
+function saveMyData(a){try{localStorage.setItem(sKey(currentUser.email),JSON.stringify(a));}catch(_){}}
+function getAllData(){
+  const all=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(!k.startsWith('mprf_'))continue;
+    try{JSON.parse(localStorage.getItem(k)||'[]').forEach(r=>all.push(r));}catch(_){}
+  }
+  return all;
+}
+
+/* ── KPI GRID ── */
+function buildKpiGrid(){
+  document.getElementById('kpi-grid').innerHTML=KPIS.map(k=>`
+    <div class="kpi-row"><div><div class="kpi-name">${k.name}</div><div class="kpi-desc">${k.desc}</div></div>
+    <div class="star-row" id="stars-${k.key}">${[1,2,3,4,5].map(v=>`<button class="star-btn" data-k="${k.key}" data-v="${v}" onclick="rate(${k.key},${v})" title="${v}">★</button>`).join('')}</div></div>`).join('');
+}
+
+function rate(kpi,val){
+  ratings[kpi]=val;
+  document.querySelectorAll(`#stars-${kpi} .star-btn`).forEach(s=>{s.className='star-btn'+(+s.dataset.v<=val?` lit-${val}`:'');});
+  updateScore();
+}
+
+function updateScore(){
+  const vals=Object.values(ratings).filter(v=>v>0);
+  if(!vals.length){document.getElementById('score-box').style.display='none';return;}
+  const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const[lbl,col]=assess(avg);
+  document.getElementById('score-box').style.display='block';
+  const n=document.getElementById('score-num');n.textContent=avg.toFixed(1);n.style.color=col;
+  const l=document.getElementById('score-lbl');l.textContent=lbl;l.style.color=col;
+}
+
+function assess(s){
+  if(s>=4.5)return['Outstanding','var(--c-out)'];
+  if(s>=3.5)return['Exceeds Expectations','var(--c-exc)'];
+  if(s>=2.5)return['Meets Expectations','var(--c-meets)'];
+  if(s>=1.5)return['Needs Improvement','var(--c-needs)'];
+  return['Poor','var(--c-poor)'];
+}
+function bcls(s){return s>=4.5?'b-out':s>=3.5?'b-exc':s>=2.5?'b-meets':s>=1.5?'b-needs':'b-poor';}
+
+/* ── ADD EMPLOYEE ── */
+function addEmployee(){
+  const name=document.getElementById('e-name').value.trim();
+  if(!name){showErr('Please enter the employee name.');return;}
+  const filled=Object.values(ratings).filter(v=>v>0);
+  if(filled.length<5){showErr('Please rate all 5 KPI areas.');return;}
+  const avg=filled.reduce((a,b)=>a+b,0)/filled.length;
+  const[assessment]=assess(avg);
+  const emp={
+    id:Date.now(),name,section:document.getElementById('e-section').value.trim(),
+    managerName:currentUser.name,managerEmail:currentUser.email,dept:currentUser.dept,
+    period:document.getElementById('m-period').value,kpis:{...ratings},
+    overall:Math.round(avg*10)/10,assessment,
+    strengths:document.getElementById('e-strengths').value,
+    improve:document.getElementById('e-improve').value,
+    comments:document.getElementById('e-comments').value,
+    date:new Date().toLocaleDateString('en-GB')
+  };
+  const arr=getMyData();arr.push(emp);saveMyData(arr);
+  document.getElementById('form-err').style.display='none';
+  clearForm();renderList();
+  const btn=document.getElementById('add-btn');
+  btn.textContent='✓ Record Saved!';btn.style.background='var(--c-out)';
+  setTimeout(()=>{btn.textContent='Add Employee Record';btn.style.background='';},2200);
+}
+
+function showErr(m){const e=document.getElementById('form-err');e.textContent=m;e.style.display='block';}
+
+function clearForm(){
+  ['e-name','e-section','e-strengths','e-improve','e-comments'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('form-err').style.display='none';
+  document.getElementById('score-box').style.display='none';
+  KPIS.forEach(k=>{ratings[k.key]=0;document.querySelectorAll(`#stars-${k.key} .star-btn`).forEach(b=>b.className='star-btn');});
+}
+
+function deleteEmp(id){
+  if(!confirm('Delete this record?'))return;
+  saveMyData(getMyData().filter(e=>e.id!==id));renderList();
+}
+
+/* ── LIST ── */
+function renderList(){
+  const data=getMyData();
+  document.getElementById('emp-count').textContent=data.length;
+  const el=document.getElementById('emp-list');
+  if(!data.length){el.innerHTML='<div class="empty"><h3>No records yet</h3><p>Add employee feedback above.</p></div>';return;}
+  el.innerHTML=`<div style="overflow-x:auto"><table class="emp-table">
+    <thead><tr><th>Employee</th><th>Section</th><th>Scores (Q·P·T·C·I)</th><th>Overall</th><th>Assessment</th><th>Date</th><th></th></tr></thead>
+    <tbody>${data.map(e=>{const[,col]=assess(e.overall);return`<tr>
+      <td><strong>${e.name}</strong></td><td style="color:var(--muted)">${e.section||'—'}</td>
+      <td style="font-family:monospace;font-size:.8rem;letter-spacing:2px">${KPIS.map(k=>e.kpis[k.key]).join(' · ')}</td>
+      <td><strong style="color:${col}">${e.overall}</strong></td>
+      <td><span class="badge ${bcls(e.overall)}">${e.assessment}</span></td>
+      <td style="color:var(--muted);font-size:.8rem">${e.date}</td>
+      <td><button class="del-btn" onclick="deleteEmp(${e.id})">✕</button></td>
+    </tr>`;}).join('')}</tbody></table></div>`;
+}
+
+/* ── NAVIGATION ── */
+function goTo(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  document.getElementById('nav-'+view).classList.add('active');
+  if(view==='mine')renderMyDash();
+  if(view==='all')renderAllDash('ALL');
+}
+
+function renderMyDash(){
+  const d=getMyData();
+  renderStats(d,'ms-total','ms-avg','ms-out','ms-low');
+  renderCharts(d,'my-kpi-chart','my-dist-chart',myKpiChart,myDistChart,(a,b)=>{myKpiChart=a;myDistChart=b;});
+  renderTable(d,'my-table',false);
+}
+
+function renderAllDash(filter){
+  selectedMgr=filter;
+  const all=getAllData();
+  const mgrs=[...new Set(all.map(e=>e.managerName).filter(Boolean))];
+  document.getElementById('mgr-tabs').innerHTML=
+    ['ALL',...mgrs].map(m=>`<button class="mgr-tab${m===selectedMgr?' active':''}" onclick="renderAllDash('${m}')">${m==='ALL'?'All Managers':m}</button>`).join('');
+  const fd=filter==='ALL'?all:all.filter(e=>e.managerName===filter);
+  renderStats(fd,'as-total','as-avg','as-out','as-low');
+  renderCharts(fd,'all-kpi-chart','all-dist-chart',allKpiChart,allDistChart,(a,b)=>{allKpiChart=a;allDistChart=b;});
+  renderTable(fd,'all-table',true);
+}
+
+function renderStats(data,tId,aId,oId,lId){
+  const n=data.length;
+  document.getElementById(tId).textContent=n;
+  if(!n){[aId,oId,lId].forEach((id,i)=>document.getElementById(id).textContent=i?'0':'—');return;}
+  const avg=data.reduce((s,e)=>s+e.overall,0)/n;
+  document.getElementById(aId).textContent=avg.toFixed(1);
+  document.getElementById(oId).textContent=data.filter(e=>e.overall>=4.5).length;
+  document.getElementById(lId).textContent=data.filter(e=>e.overall<2.5).length;
+}
+
+function renderCharts(data,kId,dId,kI,dI,save){
+  const kAvgs=KPIS.map(k=>{const v=data.map(e=>e.kpis[k.key]).filter(x=>x>0);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0;});
+  const dist=[1,2,3,4,5].map(v=>data.filter(e=>Math.round(e.overall)===v).length);
+  if(kI)kI.destroy();
+  const c1=new Chart(document.getElementById(kId).getContext('2d'),{type:'bar',
+    data:{labels:['Quality','Productivity','Teamwork','Communication','Initiative'],datasets:[{data:kAvgs.map(v=>Math.round(v*10)/10),backgroundColor:KPI_COLORS,borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.parsed.y.toFixed(1)+' / 5'}}},
+      scales:{y:{min:0,max:5,ticks:{stepSize:1},grid:{color:'#eee'}},x:{grid:{display:false},ticks:{font:{size:11}}}}}});
+  if(dI)dI.destroy();
+  const c2=new Chart(document.getElementById(dId).getContext('2d'),{type:'doughnut',
+    data:{labels:['Poor (1)','Needs Impr. (2)','Meets Exp. (3)','Exceeds Exp. (4)','Outstanding (5)'],datasets:[{data:dist,backgroundColor:['#c53030','#c05621','#b7791f','#2b6cb0','#276749'],borderWidth:0,hoverOffset:6}]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:11,font:{size:11},padding:10}}}}});
+  save(c1,c2);
+}
+
+function renderTable(data,elId,showMgr){
+  const el=document.getElementById(elId);
+  if(!data.length){el.innerHTML='<div class="empty"><h3>No data</h3><p>No employee records found.</p></div>';return;}
+  const kAvgs=KPIS.map(k=>{const v=data.map(e=>e.kpis[k.key]).filter(x=>x>0);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0;});
+  const avg=data.reduce((s,e)=>s+e.overall,0)/data.length;
+  const rows=data.map(e=>{const[,col]=assess(e.overall);return`<tr>
+    <td><strong>${e.name}</strong><div style="font-size:.72rem;color:var(--muted)">${e.section||'—'}</div>${showMgr?`<div style="font-size:.72rem;color:var(--c-mgr);margin-top:2px">${e.managerName||''}</div>`:''}</td>
+    ${KPIS.map(k=>{const[,vc]=assess(e.kpis[k.key]);return`<td style="text-align:center;color:${vc};font-weight:500">${e.kpis[k.key]}</td>`;}).join('')}
+    <td style="text-align:center"><strong style="color:${col}">${e.overall}</strong></td>
+    <td><span class="badge ${bcls(e.overall)}">${e.assessment}</span></td>
+  </tr>`;}).join('');
+  const avgRow=`<tr class="avg-row"><td>${showMgr?'All Teams':'Team'} Average</td>
+    ${kAvgs.map(v=>{const[,vc]=assess(v);return`<td style="text-align:center;color:${vc}">${v.toFixed(1)}</td>`;}).join('')}
+    <td style="text-align:center">${avg.toFixed(1)}</td><td><span class="badge ${bcls(avg)}">${assess(avg)[0]}</span></td></tr>`;
+  el.innerHTML=`<div style="overflow-x:auto"><table class="emp-table">
+    <thead><tr><th>Employee</th>${KPIS.map(k=>`<th style="text-align:center">${k.name.split(' ')[0]}</th>`).join('')}<th style="text-align:center">Overall</th><th>Assessment</th></tr></thead>
+    <tbody>${rows}${avgRow}</tbody></table></div>`;
+}
+
+/* ── CSV ── */
+function exportCSV(scope){
+  const data=scope==='all'?getAllData():getMyData();
+  if(!data.length){alert('No data to export.');return;}
+  const h=['Employee','Section','Department','Manager','Manager Email','Review Period',...KPIS.map(k=>k.name),'Overall Score','Assessment','Key Strengths','Areas for Improvement','Additional Comments','Date'];
+  const rows=data.map(e=>[e.name,e.section,e.dept,e.managerName,e.managerEmail,e.period,...KPIS.map(k=>e.kpis[k.key]),e.overall,e.assessment,e.strengths,e.improve,e.comments,e.date].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));
+  const csv=[h,...rows].map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='performance_review_'+(scope==='all'?'all_teams_':'')+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+boot();
+</script>
+</body>
+</html>
